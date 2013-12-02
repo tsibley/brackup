@@ -45,6 +45,39 @@ To be used in combination with the I<gc> command. Runs interactively,
 requiring an explicit confirmation before deleting chunks that have been
 garbage collected. Implies --verbose.
 
+=item --local-metafiles [directory]
+
+To be used with the I<gc> command. Brackup can't decrypt encrypted metafiles if
+it doesn't have access to the relevant private key.  If your target uses
+encryption, you'll need to decrypt the files manually, on a computer with the
+private key, and then pass them to Brackup. Alternatively, since Brackup
+doesn't encrypt the original local copies of metafiles, these can be used
+instead by passing this option.
+
+When this option is specified, Brackup will look for files in the current
+directory which use the default naming scheme. Another metafile directory may
+be optionally passed.  Brackup will bail out if it can't find all of the
+required metafiles.
+
+B<CAVEATS>: There are two major caveats to this option right now:
+
+=over 8
+
+=item *
+
+Local metafiles are found by their default name:
+C<SOURCE-TARGET-YYYYMMDD.brackup>.  If you use the C<--output> option to
+L<brackup> to rename your metafiles, you can't use C<--local-metafiles>.
+
+=item *
+
+Metafiles on the target use a Unix timestamp while local metafiles use a
+less-specific YYYYMMDD format.  Backups with greater frequency than a day will
+map to the wrong local file, B<potentially pruning garbage collecting data that
+is I<NOT> orphaned>!
+
+=back
+
 =back
 
 =head1 WARRANTY
@@ -85,12 +118,14 @@ my $opt_keep_backups;
 my $opt_dryrun;
 my $opt_interactive;
 my $opt_source;
+my $opt_local_metafiles;
 usage() unless
     GetOptions(
                'verbose+' => \$opt_verbose,
                'dest=s'   => \$destdir,
                'config=s' => \$config_file,
                'keep-backups=i' => \$opt_keep_backups,
+               'local-metafiles:s{,1}' => \$opt_local_metafiles,
                'dry-run'   => \$opt_dryrun,
                'interactive' => \$opt_interactive,
                'source=s' => \$opt_source,
@@ -181,7 +216,8 @@ sub CMD_prune {
 sub CMD_gc {
     my ($removed_chunks, $total_chunks) = $target->gc(dryrun => $opt_dryrun,
                                                       verbose => $opt_verbose,
-                                                      interactive => $opt_interactive);
+                                                      interactive => $opt_interactive,
+                                                      localmetafiles => $opt_local_metafiles);
     debug("$removed_chunks/$total_chunks chunks " . ($opt_dryrun ? "would be " : "") . 
           "removed from target");
 }

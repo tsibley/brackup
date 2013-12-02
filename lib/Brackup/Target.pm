@@ -139,6 +139,16 @@ sub prune {
 # removes orphaned chunks in the target
 sub gc {
     my ($self, %opt) = @_;
+    my %metafiles;
+
+    if (defined $opt{localmetafiles}) {
+        # Find all metafiles in specified directory or the cwd if no directory
+        # is specified; some may not be pertinent to the target, but we'll sort
+        # that out later.
+        $opt{localmetafiles} = "." if not length $opt{localmetafiles};
+        $opt{localmetafiles} =~ s{/$}{};
+        $metafiles{$_} = 1 for <$opt{localmetafiles}/*.brackup>;
+    }
 
     # get all chunks and then loop through metafiles to detect
     # referenced ones
@@ -151,9 +161,36 @@ sub gc {
         warn sprintf "Collating chunks from backup %s [%d/%d]\n",
             $backup->filename, $i+1, scalar(@backups) 
                 if $opt{verbose};
-        $self->get_backup($backup->filename, $tempfile);
-        my $decrypted_backup = new Brackup::DecryptedFile(filename => $tempfile);
-        my $parser = Brackup::Metafile->open($decrypted_backup->name);
+
+        my $parser;
+        if (defined $opt{localmetafiles}) {
+            # We need to find a local copy of each file on the target. The time
+            # formats differ, however: the remote one is a Unix timestamp.
+            # Locally, we have a date (without time).
+            #
+            # XXX TODO: This won't work for backups with higher granularity than a day.
+            # -trs, 25 Nov 2013
+            $backup->filename =~ /^(.*)-(\d+)$/
+                or die "Backup filename doesn't match expected format when using --local-metafiles";
+
+            my ($source, $timestamp) = ($1, $2);
+            my @date = localtime($timestamp);
+            my $localfile = sprintf "%s/%s-%s-%04d%02d%02d.brackup",
+                $opt{localmetafiles}, $source, $self->{name}, $date[5] + 1900, $date[4] + 1, $date[3];
+
+            warn sprintf "Substituting local metafile %s for backup %s\n",
+                $localfile, $backup->filename
+                    if $opt{verbose};
+
+            die "Missing local Brackup metafile: $localfile"
+                unless $metafiles{$localfile};
+
+            $parser = Brackup::Metafile->open($localfile);
+        } else {
+            $self->get_backup($backup->filename, $tempfile);
+            my $decrypted_backup = new Brackup::DecryptedFile(filename => $tempfile);
+            $parser = Brackup::Metafile->open($decrypted_backup->name);
+        }
         $parser->readline;  # skip header
         ITEM: while (my $it = $parser->readline) {
             next ITEM unless $it->{Chunks};
