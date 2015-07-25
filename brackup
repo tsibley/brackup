@@ -48,7 +48,7 @@ backup.  Stats are also printed when C<--verbose> is passed.
 
 Show status during backup.
 
-=item --dry-run
+=item --dry-run|-n
 
 Don't actually store any data on the target.
 
@@ -126,13 +126,13 @@ usage() unless
     GetOptions(
                'from=s'    => \$src_name,
                'to=s'      => \$target_name,
-               'verbose'   => \$opt_verbose,
+               'verbose+'  => \$opt_verbose,
                'zenity-progress' => \$opt_zenityprogress,
                'output=s'  => \$backup_file,
                'save-stats:s' => \$stats_file,
                'show-stats'   => \$opt_show_stats,
                'help'      => \$opt_help,
-               'dry-run'   => \$opt_dryrun,
+               'dry-run|n' => \$opt_dryrun,
                'du-stats'  => \$opt_du_stats,
                'config=s'  => \$config_file,
                'list-sources'   => \$opt_list_sources,
@@ -212,18 +212,19 @@ my $backup = Brackup::Backup->new(
                                   dryrun         => $opt_dryrun,
                                   verbose        => $opt_verbose,
                                   zenityprogress => $opt_zenityprogress,
+                                  arguments      => $arguments,
                                   );
 
 if (my $stats = eval { $backup->backup($backup_file) }) {
     warn "Backup complete.\n" if $opt_verbose;
 
-    $stats->set('Run Arguments:' => $arguments);
     if ($opt_dryrun || $opt_verbose || $opt_show_stats) {
         $stats->print;
     }
     if ($stats_file) {
         $stats->print($stats_file);
     }
+    warn "Stats complete.\n" if $opt_verbose;
     exit 0;
 } else {
     warn "Error running backup: $@\n";
